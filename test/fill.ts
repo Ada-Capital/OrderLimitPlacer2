@@ -44,7 +44,10 @@ function getMakerPrivateKey(): Hex {
   return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
 }
 
+/*
 function getTakerPrivateKey(): Hex {
+
+  // The taker private key is not necessar
   const key = getRequiredEnv("TAKER_PRIVATE_KEY");
   return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
 }
@@ -52,6 +55,7 @@ function getTakerPrivateKey(): Hex {
 function isExecuteMode(): boolean {
   return process.argv.includes("--execute");
 }
+*/
 
 async function generateTestOrder(): Promise<OrderOutput> {
   const makerPrivateKey = getMakerPrivateKey();
@@ -205,6 +209,8 @@ async function getRevertData(
   }
 }
 
+
+/*
 async function executeFill(
   order: OrderOutput,
   takerPrivateKey: Hex
@@ -277,6 +283,8 @@ async function executeFill(
     return { success: false, error: message };
   }
 }
+*/
+
 
 function displayOrderInfo(order: OrderOutput): void {
   const makerToken = ORDER_CONFIG.makerAsset;
@@ -294,7 +302,7 @@ function displayOrderInfo(order: OrderOutput): void {
 }
 
 async function main(): Promise<void> {
-  const executeMode = isExecuteMode();
+  // const executeMode = isExecuteMode();
 
   console.log("=".repeat(80));
   console.log("1INCH LIMIT ORDER FILL TEST");
@@ -313,6 +321,7 @@ async function main(): Promise<void> {
   displayOrderInfo(order);
   console.log("");
 
+/*
   if (executeMode) {
     const takerPrivateKey = getTakerPrivateKey();
     const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
@@ -337,6 +346,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   } else {
+*/
+
     console.log("Simulating fill...");
 
     const result = await simulateFill(order, TAKER_ADDRESS);
@@ -351,7 +362,7 @@ async function main(): Promise<void> {
       console.log(`Error: ${result.error}`);
       process.exit(1);
     }
-  }
+  // }
 }
 
 main().catch((error) => {
