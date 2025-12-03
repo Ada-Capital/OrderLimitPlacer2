@@ -1,0 +1,36 @@
+{
+  "name": "orderlimitplacer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "example": "example"
+  },
+  "scripts": {
+    "generate": "npx tsx src/generate-order.ts",
+    "test:fill": "npx tsx test/fill.ts",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RafaelBrla/OrderLimitPlacer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RafaelBrla/OrderLimitPlacer/issues"
+  },
+  "homepage": "https://github.com/RafaelBrla/OrderLimitPlacer#readme",
+  "dependencies": {
+    "@1inch/limit-order-sdk": "^5.2.3",
+    "dotenv": "^17.2.3",
+    "viem": "^2.41.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
