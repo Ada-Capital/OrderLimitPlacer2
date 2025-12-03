@@ -13,6 +13,16 @@ function getPolygonRpcUrl(): string {
 
 export const POLYGON_RPC_URL = getPolygonRpcUrl();
 
+function getFillerApiUrl(): string {
+  const url = process.env.FILLER_API_URL;
+  if (!url) {
+    throw new Error("FILLER_API_URL environment variable is required.");
+  }
+  return url;
+}
+
+export const FILLER_API_URL = getFillerApiUrl();
+
 export const LIMIT_ORDER_PROTOCOL_ADDRESS =
   "0x111111125421ca6dc452d289314280a0f8842a65" as const;
 
