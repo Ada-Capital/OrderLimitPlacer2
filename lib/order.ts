@@ -5,11 +5,7 @@ import {
   Extension,
 } from "@1inch/limit-order-sdk";
 import type { Hex, WalletClient } from "viem";
-import { POLYGON_CHAIN_ID, LIMIT_ORDER_PROTOCOL_ADDRESS } from "../config";
-
-// ============================================================================
-// Types
-// ============================================================================
+import { POLYGON_CHAIN_ID } from "../config";
 
 export interface OrderParams {
   makerAsset: Hex;
@@ -42,10 +38,6 @@ export interface OrderOutput {
     makerTraits: string;
   };
 }
-
-// ============================================================================
-// Order Building
-// ============================================================================
 
 export function buildMakerTraits(expirationMinutes: number): MakerTraits {
   const expirationTimestamp = BigInt(
@@ -88,10 +80,6 @@ export function createLimitOrder(params: OrderParams): LimitOrder {
   return order;
 }
 
-// ============================================================================
-// Order Signing
-// ============================================================================
-
 export async function signOrder(
   order: LimitOrder,
   walletClient: WalletClient
@@ -113,20 +101,9 @@ export async function signOrder(
   return signature;
 }
 
-// ============================================================================
-// Order Hash Computation
-// ============================================================================
-
 export function computeOrderHash(order: LimitOrder): string {
-  const typedData = order.getTypedData(POLYGON_CHAIN_ID);
-  // The order hash is derived from the typed data structure
-  // For display purposes, we use the salt as a unique identifier
   return `0x${order.salt.toString(16).padStart(64, "0")}`;
 }
-
-// ============================================================================
-// Full Order Generation
-// ============================================================================
 
 export async function generateSignedOrder(
   params: OrderParams,
@@ -144,10 +121,6 @@ export async function generateSignedOrder(
     orderData,
   };
 }
-
-// ============================================================================
-// Output Formatting
-// ============================================================================
 
 export function formatOrderOutput(signedOrder: SignedOrder): OrderOutput {
   const { signature, orderHash, orderData } = signedOrder;
@@ -168,10 +141,6 @@ export function formatOrderOutput(signedOrder: SignedOrder): OrderOutput {
   };
 }
 
-// ============================================================================
-// Signature Parsing (for fillOrder)
-// ============================================================================
-
 export function parseSignatureToCompact(signature: Hex): { r: Hex; vs: Hex } {
   const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
 
@@ -191,4 +160,3 @@ export function parseSignatureToCompact(signature: Hex): { r: Hex; vs: Hex } {
 
   return { r, vs };
 }
-

@@ -13,10 +13,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { ERC20_ABI } from "./abi";
 import { POLYGON_RPC_URL, LIMIT_ORDER_PROTOCOL_ADDRESS } from "../config";
 
-// ============================================================================
-// Client Creation
-// ============================================================================
-
 export function createPolygonPublicClient(): PublicClient {
   return createPublicClient({
     chain: polygon,
@@ -35,10 +31,6 @@ export function createPolygonWalletClient(account: Account): WalletClient {
 export function createAccountFromPrivateKey(privateKey: Hex): Account {
   return privateKeyToAccount(privateKey);
 }
-
-// ============================================================================
-// Token Operations
-// ============================================================================
 
 export async function getTokenBalance(
   client: PublicClient,
@@ -93,10 +85,6 @@ export async function approveToken(
   return hash;
 }
 
-// ============================================================================
-// Approval Check and Execute
-// ============================================================================
-
 export async function ensureTokenApproval(
   walletClient: WalletClient,
   publicClient: PublicClient,
@@ -125,10 +113,6 @@ export async function ensureTokenApproval(
   return { approved: true, txHash };
 }
 
-// ============================================================================
-// Balance Validation
-// ============================================================================
-
 export async function validateSufficientBalance(
   client: PublicClient,
   tokenAddress: Hex,
@@ -141,4 +125,3 @@ export async function validateSufficientBalance(
     balance,
   };
 }
-

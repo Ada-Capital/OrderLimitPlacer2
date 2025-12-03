@@ -1,10 +1,6 @@
 import "dotenv/config";
 import type { Hex } from "viem";
 
-// ============================================================================
-// Chain Configuration
-// ============================================================================
-
 export const POLYGON_CHAIN_ID = 137;
 
 function getPolygonRpcUrl(): string {
@@ -17,16 +13,8 @@ function getPolygonRpcUrl(): string {
 
 export const POLYGON_RPC_URL = getPolygonRpcUrl();
 
-// ============================================================================
-// 1inch Limit Order Protocol V4 (Aggregation Router V6)
-// ============================================================================
-
 export const LIMIT_ORDER_PROTOCOL_ADDRESS =
   "0x111111125421ca6dc452d289314280a0f8842a65" as const;
-
-// ============================================================================
-// Token Addresses (Polygon)
-// ============================================================================
 
 export const TOKENS = {
   USDC: {
@@ -49,19 +37,11 @@ export const TOKENS = {
 export type TokenSymbol = keyof typeof TOKENS;
 export type TokenInfo = (typeof TOKENS)[TokenSymbol];
 
-// ============================================================================
-// Order Configuration
-// ============================================================================
-
 export const ORDER_CONFIG = {
   makerAsset: TOKENS.USDC,
   takerAsset: TOKENS.BRLA,
   expirationMinutes: 60,
 } as const;
-
-// ============================================================================
-// Token Helpers
-// ============================================================================
 
 export function getTokenByAddress(address: string): TokenInfo | undefined {
   const lowerAddress = address.toLowerCase();
@@ -75,10 +55,6 @@ export function getTokenBySymbol(symbol: string): TokenInfo | undefined {
   return TOKENS[upperSymbol];
 }
 
-// ============================================================================
-// Environment Variable Helpers
-// ============================================================================
-
 export function getTakerPrivateKey(): Hex {
   const key = process.env.TAKER_PRIVATE_KEY;
   if (!key) {
@@ -86,10 +62,6 @@ export function getTakerPrivateKey(): Hex {
   }
   return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
 }
-
-// ============================================================================
-// Formatting Helpers
-// ============================================================================
 
 export function formatTokenAmount(
   amount: bigint,

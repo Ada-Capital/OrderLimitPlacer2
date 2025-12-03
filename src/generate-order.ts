@@ -1,20 +1,4 @@
 #!/usr/bin/env npx tsx
-/**
- * Generate a signed 1inch Limit Order
- *
- * This script:
- * 1. Prompts for the USDC amount to trade
- * 2. Gets a quote for the input amount
- * 3. Verifies maker has sufficient token balance
- * 4. Asks for confirmation before proceeding
- * 5. Ensures approval for 1inch contract
- * 6. Generates and signs the limit order
- * 7. Outputs the order JSON to stdout
- *
- * Required environment variables:
- *   POLYGON_RPC_URL      - Polygon RPC endpoint
- *   MAKER_PRIVATE_KEY    - Private key of order maker
- */
 
 import * as readline from "readline";
 import type { Hex } from "viem";
@@ -103,11 +87,9 @@ async function main(): Promise<void> {
     console.log("=".repeat(80));
     console.log("");
 
-    // Prompt for amount
     const amountStr = await promptForAmount(rl);
     const makingAmountRaw = parseUnits(amountStr, makerToken.decimals);
 
-    // Get quote
     console.log("");
     console.log("Getting quote...");
     const quote = await getQuote(makingAmountRaw);
@@ -118,7 +100,6 @@ async function main(): Promise<void> {
     console.log(`      Output: ${formatTokenAmount(takingAmount, takerToken.decimals, takerToken.symbol)}`);
     console.log(`      Quote Rate:  ${formatTokenAmount(makingAmount / takingAmount, makerToken.decimals, makerToken.symbol)}`);
 
-    // Create clients
     const makerAccount = createAccountFromPrivateKey(makerPrivateKey);
     const publicClient = createPolygonPublicClient();
     const walletClient = createPolygonWalletClient(makerAccount);
@@ -129,8 +110,7 @@ async function main(): Promise<void> {
     console.log(`Expiration: ${expirationMinutes} minutes`);
     console.log("");
 
-    // Check balance
-    console.log("[2/4] Checking maker balance...");
+    console.log("Checking maker balance...");
     const { sufficient, balance } = await validateSufficientBalance(
       publicClient,
       makerToken.address,
@@ -149,7 +129,6 @@ async function main(): Promise<void> {
     }
     console.log("      Balance OK");
 
-    // Confirmation
     console.log("");
     console.log("-".repeat(80));
     console.log("ORDER SUMMARY");
@@ -166,9 +145,8 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Ensure approval
     console.log("");
-    console.log("[3/4] Checking/setting approval...");
+    console.log("Checking/setting approval...");
     const { txHash } = await ensureTokenApproval(
       walletClient,
       publicClient,
@@ -183,9 +161,8 @@ async function main(): Promise<void> {
       console.log("      Already approved");
     }
 
-    // Generate and sign order
     console.log("");
-    console.log("[4/4] Generating and signing order...");
+    console.log("Generating and signing order...");
 
     const orderParams: OrderParams = {
       makerAsset: makerToken.address,
@@ -202,10 +179,9 @@ async function main(): Promise<void> {
     console.log("      Order signed successfully");
     console.log("");
     console.log("=".repeat(80));
-    console.log("ORDER OUTPUT (stdout)");
+    console.log("ORDER OUTPUT");
     console.log("=".repeat(80));
 
-    // Output JSON to stdout (for piping)
     console.log(JSON.stringify(output, null, 2));
   } finally {
     rl.close();

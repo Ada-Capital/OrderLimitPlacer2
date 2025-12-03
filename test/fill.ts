@@ -1,30 +1,12 @@
 #!/usr/bin/env npx tsx
-/**
- * Test script to simulate/execute filling a limit order
- *
- * This script:
- * 1. Loads a generated order JSON from file or stdin
- * 2. Simulates the fillOrder call using a taker address
- * 3. Reports if simulation succeeds or fails with decoded error
- *
- * Required environment variables:
- *   POLYGON_RPC_URL     - Polygon RPC endpoint
- *   TAKER_PRIVATE_KEY   - Private key for execution (required for --execute)
- *
- * Usage:
- *   ORDER_PATH=order.json npx tsx test/fill.ts
- *   ORDER_PATH=order.json npx tsx test/fill.ts --execute
- */
 
-import * as fs from "fs";
-import { encodeFunctionData, decodeErrorResult, type Hex } from "viem";
+import { encodeFunctionData, decodeErrorResult, parseUnits, type Hex } from "viem";
 import { polygon } from "viem/chains";
 import {
-  getTakerPrivateKey,
   formatTokenAmount,
-  getTokenByAddress,
   LIMIT_ORDER_PROTOCOL_ADDRESS,
   POLYGON_RPC_URL,
+  ORDER_CONFIG,
 } from "../config";
 import {
   createPolygonPublicClient,
@@ -33,71 +15,96 @@ import {
   validateSufficientBalance,
   ensureTokenApproval,
 } from "../lib/blockchain";
-import { parseSignatureToCompact, type OrderOutput } from "../lib/order";
+import {
+  generateSignedOrder,
+  formatOrderOutput,
+  parseSignatureToCompact,
+  type OrderParams,
+  type OrderOutput,
+} from "../lib/order";
 import { LIMIT_ORDER_PROTOCOL_ABI } from "../lib/abi";
+import { getQuote } from "../lib/quote";
 
-// ============================================================================
-// Environment Loading
-// ============================================================================
+const TAKER_ADDRESS = "0x177CE60D2161fcfDD00274620E2f35a653a64Cd6" as Hex;
+const MAKER_ADDRESS = "0x4D9e1f35e8eEB9162207d51B7Aa7a6898BD27090" as Hex;
+
+const TEST_MAKING_AMOUNT = "1";
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    console.error(`Error: ${name} environment variable is required.`);
+    console.log(`Error: ${name} environment variable is required.`);
     process.exit(1);
   }
   return value;
+}
+
+function getMakerPrivateKey(): Hex {
+  const key = getRequiredEnv("MAKER_PRIVATE_KEY");
+  return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
+}
+
+function getTakerPrivateKey(): Hex {
+  const key = getRequiredEnv("TAKER_PRIVATE_KEY");
+  return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
 }
 
 function isExecuteMode(): boolean {
   return process.argv.includes("--execute");
 }
 
-// ============================================================================
-// Order Loading
-// ============================================================================
+async function generateTestOrder(): Promise<OrderOutput> {
+  const makerPrivateKey = getMakerPrivateKey();
+  const makerToken = ORDER_CONFIG.makerAsset;
+  const takerToken = ORDER_CONFIG.takerAsset;
+  const expirationMinutes = ORDER_CONFIG.expirationMinutes;
 
-function loadOrderFromFile(path: string): OrderOutput {
-  const content = fs.readFileSync(path, "utf-8");
-  return JSON.parse(content) as OrderOutput;
-}
+  const makingAmountRaw = parseUnits(TEST_MAKING_AMOUNT, makerToken.decimals);
+  const quote = await getQuote(makingAmountRaw);
 
-function loadOrderFromStdin(): Promise<OrderOutput> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    process.stdin.setEncoding("utf-8");
-    process.stdin.on("data", (chunk) => {
-      data += chunk;
-    });
-    process.stdin.on("end", () => {
-      try {
-        resolve(JSON.parse(data) as OrderOutput);
-      } catch {
-        reject(new Error("Failed to parse order JSON from stdin"));
-      }
-    });
-    process.stdin.on("error", reject);
-  });
-}
+  const makerAccount = createAccountFromPrivateKey(makerPrivateKey);
+  const publicClient = createPolygonPublicClient();
+  const walletClient = createPolygonWalletClient(makerAccount);
 
-async function loadOrder(): Promise<OrderOutput> {
-  const orderPath = process.env.ORDER_PATH;
-  
-  if (orderPath) {
-    return loadOrderFromFile(orderPath);
+  const { sufficient, balance } = await validateSufficientBalance(
+    publicClient,
+    makerToken.address,
+    makerAccount.address,
+    quote.inputAmount
+  );
+
+  console.log(`Maker balance: ${formatTokenAmount(balance, makerToken.decimals, makerToken.symbol)}`);
+
+  if (!sufficient) {
+    console.log(`Error: Maker has insufficient ${makerToken.symbol} balance`);
+    console.log(`Required: ${formatTokenAmount(quote.inputAmount, makerToken.decimals, makerToken.symbol)}`);
+    process.exit(1);
   }
 
-  if (!process.stdin.isTTY) {
-    return loadOrderFromStdin();
+  const { txHash: approvalTx } = await ensureTokenApproval(
+    walletClient,
+    publicClient,
+    makerToken.address,
+    makerAccount.address,
+    quote.inputAmount
+  );
+
+  if (approvalTx) {
+    console.log(`Maker approval tx: ${approvalTx}`);
   }
 
-  console.error("Error: ORDER_PATH environment variable is required.");
-  process.exit(1);
-}
+  const orderParams: OrderParams = {
+    makerAsset: makerToken.address,
+    takerAsset: takerToken.address,
+    makingAmount: quote.inputAmount,
+    takingAmount: quote.outputAmount,
+    maker: makerAccount.address,
+    expirationMinutes,
+  };
 
-// ============================================================================
-// Order Struct Building
-// ============================================================================
+  const signedOrder = await generateSignedOrder(orderParams, walletClient);
+  return formatOrderOutput(signedOrder);
+}
 
 function buildOrderStruct(order: OrderOutput["order"]) {
   return {
@@ -112,10 +119,6 @@ function buildOrderStruct(order: OrderOutput["order"]) {
   };
 }
 
-// ============================================================================
-// Fill Transaction Building
-// ============================================================================
-
 function buildFillOrderData(order: OrderOutput, takingAmount: bigint): Hex {
   const orderStruct = buildOrderStruct(order.order);
   const { r, vs } = parseSignatureToCompact(order.signature);
@@ -126,10 +129,6 @@ function buildFillOrderData(order: OrderOutput, takingAmount: bigint): Hex {
     args: [orderStruct, r, vs, takingAmount, 0n],
   });
 }
-
-// ============================================================================
-// Error Decoding
-// ============================================================================
 
 function decodeRevertError(errorData: string | undefined): string {
   if (!errorData || errorData === "0x") {
@@ -151,10 +150,6 @@ function decodeRevertError(errorData: string | undefined): string {
     return `Unknown error with selector ${selector}`;
   }
 }
-
-// ============================================================================
-// Simulation
-// ============================================================================
 
 async function simulateFill(
   order: OrderOutput,
@@ -210,10 +205,6 @@ async function getRevertData(
   }
 }
 
-// ============================================================================
-// Execution
-// ============================================================================
-
 async function executeFill(
   order: OrderOutput,
   takerPrivateKey: Hex
@@ -223,12 +214,7 @@ async function executeFill(
   const walletClient = createPolygonWalletClient(takerAccount);
 
   const takingAmount = BigInt(order.order.takingAmount);
-  const takerAssetAddress = `0x${BigInt(order.order.takerAsset).toString(16).padStart(40, "0")}` as Hex;
-
-  const takerToken = getTokenByAddress(takerAssetAddress);
-  if (!takerToken) {
-    return { success: false, error: `Unknown taker asset: ${takerAssetAddress}` };
-  }
+  const takerToken = ORDER_CONFIG.takerAsset;
 
   const { sufficient, balance } = await validateSufficientBalance(
     publicClient,
@@ -292,52 +278,36 @@ async function executeFill(
   }
 }
 
-// ============================================================================
-// Display Order Info
-// ============================================================================
-
 function displayOrderInfo(order: OrderOutput): void {
-  const makerAssetHex = `0x${BigInt(order.order.makerAsset).toString(16).padStart(40, "0")}` as Hex;
-  const takerAssetHex = `0x${BigInt(order.order.takerAsset).toString(16).padStart(40, "0")}` as Hex;
-  const makerToken = getTokenByAddress(makerAssetHex);
-  const takerToken = getTokenByAddress(takerAssetHex);
+  const makerToken = ORDER_CONFIG.makerAsset;
+  const takerToken = ORDER_CONFIG.takerAsset;
 
   console.log(`Order Hash: ${order.orderHash}`);
+  console.log(`Maker Asset: ${makerToken.address} (${makerToken.symbol})`);
+  console.log(`Taker Asset: ${takerToken.address} (${takerToken.symbol})`);
   console.log(
-    `Maker Asset: ${makerAssetHex}${makerToken ? ` (${makerToken.symbol})` : ""}`
+    `Making Amount: ${formatTokenAmount(BigInt(order.order.makingAmount), makerToken.decimals, makerToken.symbol)}`
   );
   console.log(
-    `Taker Asset: ${takerAssetHex}${takerToken ? ` (${takerToken.symbol})` : ""}`
+    `Taking Amount: ${formatTokenAmount(BigInt(order.order.takingAmount), takerToken.decimals, takerToken.symbol)}`
   );
-
-  if (makerToken) {
-    console.log(
-      `Making Amount: ${formatTokenAmount(BigInt(order.order.makingAmount), makerToken.decimals, makerToken.symbol)}`
-    );
-  } else {
-    console.log(`Making Amount: ${order.order.makingAmount}`);
-  }
-
-  if (takerToken) {
-    console.log(
-      `Taking Amount: ${formatTokenAmount(BigInt(order.order.takingAmount), takerToken.decimals, takerToken.symbol)}`
-    );
-  } else {
-    console.log(`Taking Amount: ${order.order.takingAmount}`);
-  }
 }
 
-// ============================================================================
-// Main Flow
-// ============================================================================
-
 async function main(): Promise<void> {
-  const order = await loadOrder();
   const executeMode = isExecuteMode();
 
   console.log("=".repeat(80));
   console.log("1INCH LIMIT ORDER FILL TEST");
   console.log("=".repeat(80));
+  console.log("");
+
+  console.log(`Maker Address: ${MAKER_ADDRESS}`);
+  console.log(`Taker Address: ${TAKER_ADDRESS}`);
+  console.log(`Test Amount: ${TEST_MAKING_AMOUNT} ${ORDER_CONFIG.makerAsset.symbol}`);
+  console.log("");
+
+  console.log("Generating test order...");
+  const order = await generateTestOrder();
   console.log("");
 
   displayOrderInfo(order);
@@ -347,7 +317,7 @@ async function main(): Promise<void> {
     const takerPrivateKey = getTakerPrivateKey();
     const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
 
-    console.log(`Taker Address: ${takerAccount.address}`);
+    console.log(`Executing with: ${takerAccount.address}`);
     console.log("");
     console.log("Executing fill...");
 
@@ -367,14 +337,9 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   } else {
-    const takerPrivateKey = getTakerPrivateKey();
-    const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
-
-    console.log(`Taker Address: ${takerAccount.address}`);
-    console.log("");
     console.log("Simulating fill...");
 
-    const result = await simulateFill(order, takerAccount.address);
+    const result = await simulateFill(order, TAKER_ADDRESS);
 
     if (result.success) {
       console.log("");
@@ -390,6 +355,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("Fatal error:", error);
+  console.log("Fatal error:", error);
   process.exit(1);
 });
