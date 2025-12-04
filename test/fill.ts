@@ -1,7 +1,6 @@
 #!/usr/bin/env npx tsx
 
-import { encodeFunctionData, decodeErrorResult, parseUnits, type Hex } from "viem";
-import { polygon } from "viem/chains";
+import { encodeFunctionData, decodeErrorResult, type Hex } from "viem";
 import {
   formatTokenAmount,
   LIMIT_ORDER_PROTOCOL_ADDRESS,
@@ -12,21 +11,11 @@ import {
   createPolygonPublicClient,
   createPolygonWalletClient,
   createAccountFromPrivateKey,
-  validateSufficientBalance,
   ensureTokenApproval,
 } from "../lib/blockchain";
-import {
-  generateSignedOrder,
-  formatOrderOutput,
-  parseSignatureToCompact,
-  type OrderParams,
-  type OrderOutput,
-} from "../lib/order";
+import { parseSignatureToCompact, type OrderOutput } from "../lib/order";
 import { LIMIT_ORDER_PROTOCOL_ABI } from "../lib/abi";
-import { getQuote } from "../lib/quote";
-
-const TAKER_ADDRESS = "0x177CE60D2161fcfDD00274620E2f35a653a64Cd6" as Hex;
-const MAKER_ADDRESS = "0x4D9e1f35e8eEB9162207d51B7Aa7a6898BD27090" as Hex;
+import { generateOrder } from "../lib/generate";
 
 const TEST_MAKING_AMOUNT = "1";
 
@@ -44,70 +33,9 @@ function getMakerPrivateKey(): Hex {
   return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
 }
 
-/*
 function getTakerPrivateKey(): Hex {
-
-  // The taker private key is not necessar
   const key = getRequiredEnv("TAKER_PRIVATE_KEY");
   return key.startsWith("0x") ? (key as Hex) : (`0x${key}` as Hex);
-}
-
-function isExecuteMode(): boolean {
-  return process.argv.includes("--execute");
-}
-*/
-
-async function generateTestOrder(): Promise<OrderOutput> {
-  const makerPrivateKey = getMakerPrivateKey();
-  const makerToken = ORDER_CONFIG.makerAsset;
-  const takerToken = ORDER_CONFIG.takerAsset;
-  const expirationMinutes = ORDER_CONFIG.expirationMinutes;
-
-  const makingAmountRaw = parseUnits(TEST_MAKING_AMOUNT, makerToken.decimals);
-  const quote = await getQuote(makingAmountRaw);
-
-  const makerAccount = createAccountFromPrivateKey(makerPrivateKey);
-  const publicClient = createPolygonPublicClient();
-  const walletClient = createPolygonWalletClient(makerAccount);
-
-  const { sufficient, balance } = await validateSufficientBalance(
-    publicClient,
-    makerToken.address,
-    makerAccount.address,
-    quote.inputAmount
-  );
-
-  console.log(`Maker balance: ${formatTokenAmount(balance, makerToken.decimals, makerToken.symbol)}`);
-
-  if (!sufficient) {
-    console.log(`Error: Maker has insufficient ${makerToken.symbol} balance`);
-    console.log(`Required: ${formatTokenAmount(quote.inputAmount, makerToken.decimals, makerToken.symbol)}`);
-    process.exit(1);
-  }
-
-  const { txHash: approvalTx } = await ensureTokenApproval(
-    walletClient,
-    publicClient,
-    makerToken.address,
-    makerAccount.address,
-    quote.inputAmount
-  );
-
-  if (approvalTx) {
-    console.log(`Maker approval tx: ${approvalTx}`);
-  }
-
-  const orderParams: OrderParams = {
-    makerAsset: makerToken.address,
-    takerAsset: takerToken.address,
-    makingAmount: quote.inputAmount,
-    takingAmount: quote.outputAmount,
-    maker: makerAccount.address,
-    expirationMinutes,
-  };
-
-  const signedOrder = await generateSignedOrder(orderParams, walletClient);
-  return formatOrderOutput(signedOrder);
 }
 
 function buildOrderStruct(order: OrderOutput["order"]) {
@@ -126,6 +54,7 @@ function buildOrderStruct(order: OrderOutput["order"]) {
 function buildFillOrderData(order: OrderOutput, takingAmount: bigint): Hex {
   const orderStruct = buildOrderStruct(order.order);
   const { r, vs } = parseSignatureToCompact(order.signature);
+
 
   return encodeFunctionData({
     abi: LIMIT_ORDER_PROTOCOL_ABI,
@@ -152,6 +81,29 @@ function decodeRevertError(errorData: string | undefined): string {
   } catch {
     const selector = errorData.slice(0, 10);
     return `Unknown error with selector ${selector}`;
+  }
+}
+
+async function getRevertData(
+  to: Hex,
+  data: Hex,
+  from: Hex
+): Promise<string | undefined> {
+  try {
+    const response = await fetch(POLYGON_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_call",
+        params: [{ from, to, data }, "latest"],
+      }),
+    });
+    const result = (await response.json()) as { error?: { data?: string } };
+    return result.error?.data;
+  } catch {
+    return undefined;
   }
 }
 
@@ -186,106 +138,6 @@ async function simulateFill(
   }
 }
 
-async function getRevertData(
-  to: Hex,
-  data: Hex,
-  from: Hex
-): Promise<string | undefined> {
-  try {
-    const response = await fetch(POLYGON_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_call",
-        params: [{ from, to, data }, "latest"],
-      }),
-    });
-    const result = (await response.json()) as { error?: { data?: string } };
-    return result.error?.data;
-  } catch {
-    return undefined;
-  }
-}
-
-
-/*
-async function executeFill(
-  order: OrderOutput,
-  takerPrivateKey: Hex
-): Promise<{ success: boolean; txHash?: Hex; error?: string }> {
-  const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
-  const publicClient = createPolygonPublicClient();
-  const walletClient = createPolygonWalletClient(takerAccount);
-
-  const takingAmount = BigInt(order.order.takingAmount);
-  const takerToken = ORDER_CONFIG.takerAsset;
-
-  const { sufficient, balance } = await validateSufficientBalance(
-    publicClient,
-    takerToken.address,
-    takerAccount.address,
-    takingAmount
-  );
-
-  console.log(
-    `Taker balance: ${formatTokenAmount(balance, takerToken.decimals, takerToken.symbol)}`
-  );
-
-  if (!sufficient) {
-    return {
-      success: false,
-      error: `Insufficient ${takerToken.symbol} balance`,
-    };
-  }
-
-  const { txHash: approvalTx } = await ensureTokenApproval(
-    walletClient,
-    publicClient,
-    takerToken.address,
-    takerAccount.address,
-    takingAmount
-  );
-
-  if (approvalTx) {
-    console.log(`Approval tx: ${approvalTx}`);
-  }
-
-  const fillData = buildFillOrderData(order, takingAmount);
-
-  try {
-    const gasEstimate = await publicClient.estimateGas({
-      account: takerAccount.address,
-      to: LIMIT_ORDER_PROTOCOL_ADDRESS as Hex,
-      data: fillData,
-    });
-
-    const txHash = await walletClient.sendTransaction({
-      to: LIMIT_ORDER_PROTOCOL_ADDRESS as Hex,
-      data: fillData,
-      chain: polygon,
-      account: takerAccount,
-      gas: gasEstimate + gasEstimate / 10n,
-    });
-
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-
-    if (receipt.status === "success") {
-      return { success: true, txHash };
-    } else {
-      return { success: false, txHash, error: "Transaction reverted" };
-    }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { success: false, error: message };
-  }
-}
-*/
-
-
 function displayOrderInfo(order: OrderOutput): void {
   const makerToken = ORDER_CONFIG.makerAsset;
   const takerToken = ORDER_CONFIG.takerAsset;
@@ -302,67 +154,66 @@ function displayOrderInfo(order: OrderOutput): void {
 }
 
 async function main(): Promise<void> {
-  // const executeMode = isExecuteMode();
-
   console.log("=".repeat(80));
   console.log("1INCH LIMIT ORDER FILL TEST");
   console.log("=".repeat(80));
   console.log("");
 
-  console.log(`Maker Address: ${MAKER_ADDRESS}`);
-  console.log(`Taker Address: ${TAKER_ADDRESS}`);
+  const makerPrivateKey = getMakerPrivateKey();
+  const takerPrivateKey = getTakerPrivateKey();
+  const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
+
   console.log(`Test Amount: ${TEST_MAKING_AMOUNT} ${ORDER_CONFIG.makerAsset.symbol}`);
   console.log("");
 
-  console.log("Generating test order...");
-  const order = await generateTestOrder();
+  console.log("Generating order using shared generateOrder()...");
   console.log("");
 
-  displayOrderInfo(order);
+  const result = await generateOrder({
+    makerPrivateKey,
+    amountStr: TEST_MAKING_AMOUNT,
+  });
+
+  console.log("");
+  displayOrderInfo(result.order);
+  console.log("");
+  console.log("Order JSON:");
+  console.log(JSON.stringify(result.order, null, 2));
   console.log("");
 
-/*
-  if (executeMode) {
-    const takerPrivateKey = getTakerPrivateKey();
-    const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
+  const publicClient = createPolygonPublicClient();
+  const takerWalletClient = createPolygonWalletClient(takerAccount);
+  const takingAmount = BigInt(result.order.order.takingAmount);
+  const takerToken = ORDER_CONFIG.takerAsset;
 
-    console.log(`Executing with: ${takerAccount.address}`);
-    console.log("");
-    console.log("Executing fill...");
-
-    const result = await executeFill(order, takerPrivateKey);
-
-    if (result.success) {
-      console.log("");
-      console.log("FILL SUCCESSFUL");
-      console.log(`Transaction: ${result.txHash}`);
-    } else {
-      console.log("");
-      console.log("FILL FAILED");
-      console.log(`Error: ${result.error}`);
-      if (result.txHash) {
-        console.log(`Transaction: ${result.txHash}`);
-      }
-      process.exit(1);
-    }
+  console.log("Ensuring taker BRLA approval...");
+  const { txHash: approvalTx } = await ensureTokenApproval(
+    takerWalletClient,
+    publicClient,
+    takerToken.address,
+    takerAccount.address,
+    takingAmount
+  );
+  if (approvalTx) {
+    console.log(`Approval tx: ${approvalTx}`);
   } else {
-*/
+    console.log("Already approved");
+  }
+  console.log("");
 
-    console.log("Simulating fill...");
+  console.log("Simulating fill...");
+  const simResult = await simulateFill(result.order, takerAccount.address);
 
-    const result = await simulateFill(order, TAKER_ADDRESS);
-
-    if (result.success) {
-      console.log("");
-      console.log("SIMULATION PASSED");
-      console.log("The order can be filled successfully.");
-    } else {
-      console.log("");
-      console.log("SIMULATION FAILED");
-      console.log(`Error: ${result.error}`);
-      process.exit(1);
-    }
-  // }
+  if (simResult.success) {
+    console.log("");
+    console.log("SIMULATION PASSED");
+    console.log("The order can be filled successfully.");
+  } else {
+    console.log("");
+    console.log("SIMULATION FAILED");
+    console.log(`Error: ${simResult.error}`);
+    process.exit(1);
+  }
 }
 
 main().catch((error) => {
