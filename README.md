@@ -16,6 +16,30 @@ POLYGON_RPC_URL=https://polygon-rpc.com
 MAKER_PRIVATE_KEY=0x...
 ```
 
+## Get Quote
+
+```bash
+npm run quote
+```
+
+Example output:
+
+```
+============================================================
+USDC -> BRLA QUOTE
+============================================================
+
+Enter amount of USDC to quote: 100
+
+Getting quote...
+
+------------------------------------------------------------
+  Input:  100 USDC
+  Output: 531.38 BRLA
+  Rate:   5.3138 BRLA/USDC
+------------------------------------------------------------
+```
+
 ## Generate Order
 
 ```bash
