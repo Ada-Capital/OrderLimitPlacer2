@@ -47,11 +47,39 @@ export const TOKENS = {
 export type TokenSymbol = keyof typeof TOKENS;
 export type TokenInfo = (typeof TOKENS)[TokenSymbol];
 
-export const ORDER_CONFIG = {
-  makerAsset: TOKENS.USDC,
-  takerAsset: TOKENS.BRLA,
-  expirationMinutes: 60,
-} as const;
+export type TradingPair = {
+  source: TokenInfo;
+  output: TokenInfo;
+};
+
+export const VALID_PAIRS: TradingPair[] = [
+  { source: TOKENS.USDC, output: TOKENS.BRLA },
+  { source: TOKENS.USDT, output: TOKENS.BRLA },
+  { source: TOKENS.BRLA, output: TOKENS.USDC },
+  { source: TOKENS.BRLA, output: TOKENS.USDT },
+];
+
+export function getPairLabel(pair: TradingPair): string {
+  return `${pair.source.symbol} -> ${pair.output.symbol}`;
+}
+
+export function isValidPair(source: string, output: string): boolean {
+  return VALID_PAIRS.some(
+    (p) =>
+      p.source.symbol.toUpperCase() === source.toUpperCase() &&
+      p.output.symbol.toUpperCase() === output.toUpperCase()
+  );
+}
+
+export function getPair(source: string, output: string): TradingPair | undefined {
+  return VALID_PAIRS.find(
+    (p) =>
+      p.source.symbol.toUpperCase() === source.toUpperCase() &&
+      p.output.symbol.toUpperCase() === output.toUpperCase()
+  );
+}
+
+export const ORDER_EXPIRATION_MINUTES = 60;
 
 export function getTokenByAddress(address: string): TokenInfo | undefined {
   const lowerAddress = address.toLowerCase();

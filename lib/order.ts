@@ -59,7 +59,7 @@ export function createLimitOrder(params: OrderParams): LimitOrder {
     takingAmount,
     maker,
     receiver,
-    expirationMinutes = 60,
+    expirationMinutes = 60 * 24, // 24 hours
   } = params;
 
   const makerTraits = buildMakerTraits(expirationMinutes);

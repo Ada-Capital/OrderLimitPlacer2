@@ -1,6 +1,11 @@
 import type { Hex } from "viem";
 import { parseUnits } from "viem";
-import { ORDER_CONFIG, formatTokenAmount } from "../config";
+import {
+  ORDER_EXPIRATION_MINUTES,
+  formatTokenAmount,
+  getPairLabel,
+  type TradingPair,
+} from "../config";
 import {
   createPolygonPublicClient,
   createPolygonWalletClient,
@@ -19,6 +24,7 @@ import { getQuote, type QuoteResult } from "./quote";
 export interface GenerateOrderOptions {
   makerPrivateKey: Hex;
   amountStr: string;
+  pair: TradingPair;
   skipApproval?: boolean;
   silent?: boolean;
 }
@@ -38,25 +44,37 @@ function log(silent: boolean, ...args: unknown[]) {
 export async function generateOrder(
   options: GenerateOrderOptions
 ): Promise<GenerateOrderResult> {
-  const { makerPrivateKey, amountStr, skipApproval = false, silent = false } = options;
+  const {
+    makerPrivateKey,
+    amountStr,
+    pair,
+    skipApproval = false,
+    silent = false,
+  } = options;
 
-  const makerToken = ORDER_CONFIG.makerAsset;
-  const takerToken = ORDER_CONFIG.takerAsset;
-  const expirationMinutes = ORDER_CONFIG.expirationMinutes;
+  const sourceToken = pair.source;
+  const outputToken = pair.output;
+  const expirationMinutes = ORDER_EXPIRATION_MINUTES;
 
-  const makingAmountRaw = parseUnits(amountStr, makerToken.decimals);
+  const makingAmountRaw = parseUnits(amountStr, sourceToken.decimals);
   if (makingAmountRaw <= 0n) {
     throw new Error("Amount must be greater than zero.");
   }
 
   log(silent, "Getting quote...");
-  const quote = await getQuote(makingAmountRaw);
+  const quote = await getQuote(makingAmountRaw, pair);
   const makingAmount = quote.inputAmount;
   const takingAmount = quote.outputAmount;
 
-  log(silent, `      Input:  ${formatTokenAmount(makingAmount, makerToken.decimals, makerToken.symbol)}`);
-  log(silent, `      Output: ${formatTokenAmount(takingAmount, takerToken.decimals, takerToken.symbol)}`);
-  log(silent, `      Rate:   ${quote.rate} BRLA/USDC`);
+  log(
+    silent,
+    `      Input:  ${formatTokenAmount(makingAmount, sourceToken.decimals, sourceToken.symbol)}`
+  );
+  log(
+    silent,
+    `      Output: ${formatTokenAmount(takingAmount, outputToken.decimals, outputToken.symbol)}`
+  );
+  log(silent, `      Rate:   ${quote.rate} ${outputToken.symbol}/${sourceToken.symbol}`);
 
   const makerAccount = createAccountFromPrivateKey(makerPrivateKey);
   const publicClient = createPolygonPublicClient();
@@ -64,23 +82,26 @@ export async function generateOrder(
 
   log(silent, "");
   log(silent, `Maker Address: ${makerAccount.address}`);
-  log(silent, `Order: ${makerToken.symbol} -> ${takerToken.symbol}`);
+  log(silent, `Order: ${getPairLabel(pair)}`);
   log(silent, `Expiration: ${expirationMinutes} minutes`);
   log(silent, "");
 
   log(silent, "Checking maker balance...");
   const { sufficient, balance } = await validateSufficientBalance(
     publicClient,
-    makerToken.address,
+    sourceToken.address,
     makerAccount.address,
     makingAmount
   );
 
-  log(silent, `      Balance: ${formatTokenAmount(balance, makerToken.decimals, makerToken.symbol)}`);
+  log(
+    silent,
+    `      Balance: ${formatTokenAmount(balance, sourceToken.decimals, sourceToken.symbol)}`
+  );
 
   if (!sufficient) {
     throw new Error(
-      `Insufficient ${makerToken.symbol} balance. Required: ${formatTokenAmount(makingAmount, makerToken.decimals, makerToken.symbol)}, Available: ${formatTokenAmount(balance, makerToken.decimals, makerToken.symbol)}`
+      `Insufficient ${sourceToken.symbol} balance. Required: ${formatTokenAmount(makingAmount, sourceToken.decimals, sourceToken.symbol)}, Available: ${formatTokenAmount(balance, sourceToken.decimals, sourceToken.symbol)}`
     );
   }
   log(silent, "      Balance OK");
@@ -91,7 +112,7 @@ export async function generateOrder(
     const { txHash } = await ensureTokenApproval(
       walletClient,
       publicClient,
-      makerToken.address,
+      sourceToken.address,
       makerAccount.address,
       makingAmount
     );
@@ -107,8 +128,8 @@ export async function generateOrder(
   log(silent, "Generating and signing order...");
 
   const orderParams: OrderParams = {
-    makerAsset: makerToken.address,
-    takerAsset: takerToken.address,
+    makerAsset: sourceToken.address,
+    takerAsset: outputToken.address,
     makingAmount,
     takingAmount,
     maker: makerAccount.address,
@@ -126,4 +147,3 @@ export async function generateOrder(
     makerAddress: makerAccount.address,
   };
 }
-

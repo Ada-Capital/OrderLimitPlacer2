@@ -5,7 +5,8 @@ import {
   formatTokenAmount,
   LIMIT_ORDER_PROTOCOL_ADDRESS,
   POLYGON_RPC_URL,
-  ORDER_CONFIG,
+  VALID_PAIRS,
+  getPairLabel,
 } from "../config";
 import {
   createPolygonPublicClient,
@@ -18,6 +19,7 @@ import { LIMIT_ORDER_PROTOCOL_ABI } from "../lib/abi";
 import { generateOrder } from "../lib/generate";
 
 const TEST_MAKING_AMOUNT = "1";
+const TEST_PAIR = VALID_PAIRS[0]; // USDC -> BRLA
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
@@ -54,7 +56,6 @@ function buildOrderStruct(order: OrderOutput["order"]) {
 function buildFillOrderData(order: OrderOutput, takingAmount: bigint): Hex {
   const orderStruct = buildOrderStruct(order.order);
   const { r, vs } = parseSignatureToCompact(order.signature);
-
 
   return encodeFunctionData({
     abi: LIMIT_ORDER_PROTOCOL_ABI,
@@ -139,17 +140,17 @@ async function simulateFill(
 }
 
 function displayOrderInfo(order: OrderOutput): void {
-  const makerToken = ORDER_CONFIG.makerAsset;
-  const takerToken = ORDER_CONFIG.takerAsset;
+  const sourceToken = TEST_PAIR.source;
+  const outputToken = TEST_PAIR.output;
 
   console.log(`Order Hash: ${order.orderHash}`);
-  console.log(`Maker Asset: ${makerToken.address} (${makerToken.symbol})`);
-  console.log(`Taker Asset: ${takerToken.address} (${takerToken.symbol})`);
+  console.log(`Maker Asset: ${sourceToken.address} (${sourceToken.symbol})`);
+  console.log(`Taker Asset: ${outputToken.address} (${outputToken.symbol})`);
   console.log(
-    `Making Amount: ${formatTokenAmount(BigInt(order.order.makingAmount), makerToken.decimals, makerToken.symbol)}`
+    `Making Amount: ${formatTokenAmount(BigInt(order.order.makingAmount), sourceToken.decimals, sourceToken.symbol)}`
   );
   console.log(
-    `Taking Amount: ${formatTokenAmount(BigInt(order.order.takingAmount), takerToken.decimals, takerToken.symbol)}`
+    `Taking Amount: ${formatTokenAmount(BigInt(order.order.takingAmount), outputToken.decimals, outputToken.symbol)}`
   );
 }
 
@@ -163,7 +164,8 @@ async function main(): Promise<void> {
   const takerPrivateKey = getTakerPrivateKey();
   const takerAccount = createAccountFromPrivateKey(takerPrivateKey);
 
-  console.log(`Test Amount: ${TEST_MAKING_AMOUNT} ${ORDER_CONFIG.makerAsset.symbol}`);
+  console.log(`Test Pair: ${getPairLabel(TEST_PAIR)}`);
+  console.log(`Test Amount: ${TEST_MAKING_AMOUNT} ${TEST_PAIR.source.symbol}`);
   console.log("");
 
   console.log("Generating order using shared generateOrder()...");
@@ -172,6 +174,7 @@ async function main(): Promise<void> {
   const result = await generateOrder({
     makerPrivateKey,
     amountStr: TEST_MAKING_AMOUNT,
+    pair: TEST_PAIR,
   });
 
   console.log("");
@@ -184,13 +187,13 @@ async function main(): Promise<void> {
   const publicClient = createPolygonPublicClient();
   const takerWalletClient = createPolygonWalletClient(takerAccount);
   const takingAmount = BigInt(result.order.order.takingAmount);
-  const takerToken = ORDER_CONFIG.takerAsset;
+  const outputToken = TEST_PAIR.output;
 
-  console.log("Ensuring taker BRLA approval...");
+  console.log(`Ensuring taker ${outputToken.symbol} approval...`);
   const { txHash: approvalTx } = await ensureTokenApproval(
     takerWalletClient,
     publicClient,
-    takerToken.address,
+    outputToken.address,
     takerAccount.address,
     takingAmount
   );
