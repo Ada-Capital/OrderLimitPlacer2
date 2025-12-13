@@ -21,9 +21,6 @@ export interface ExecuteRequest {
 export interface ExecuteResponse {
   success: boolean;
   message?: string;
-  txId?: string;
-  error?: string;
-  details?: string;
 }
 
 function buildExecuteRequest(orderOutput: OrderOutput): ExecuteRequest {
@@ -55,7 +52,17 @@ export async function executeOrder(orderOutput: OrderOutput): Promise<ExecuteRes
     body: JSON.stringify(request),
   });
 
-  const data = await response.json() as ExecuteResponse;
-  return data;
+  const data = (await response.json()) as Record<string, unknown>;
+
+  if (!response.ok) {
+    const errorMsg = data.error ?? data.message ?? response.statusText;
+    const details = data.details ?? data.extraInfo;
+    return {
+      success: false,
+      message: details ? `${errorMsg}: ${details}` : String(errorMsg),
+    };
+  }
+
+  return data as unknown as ExecuteResponse;
 }
 

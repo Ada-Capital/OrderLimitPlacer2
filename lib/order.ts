@@ -5,7 +5,7 @@ import {
   Extension,
 } from "@1inch/limit-order-sdk";
 import type { Hex, WalletClient } from "viem";
-import {  POLYGON_CHAIN_ID } from "../config";
+import { POLYGON_CHAIN_ID } from "../config";
 
 export interface OrderParams {
   makerAsset: Hex;
@@ -90,12 +90,11 @@ export async function signOrder(
   }
 
   const typedData = order.getTypedData(POLYGON_CHAIN_ID);
-  
+
   // const domain = {
   //   ...typedData.domain,
   //   verifyingContract: LIMIT_ORDER_PROTOCOL_ADDRESS as Address,
   // };
-  // console.log(domain);
 
   const signature = await walletClient.signTypedData({
     account: walletClient.account,

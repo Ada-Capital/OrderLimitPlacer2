@@ -276,12 +276,13 @@ async function main(): Promise<void> {
 
   if (executeResult.success) {
     console.log("      Order submitted successfully");
-    console.log(`      TX ID: ${executeResult.txId}`);
+    if (executeResult.message) {
+      console.log(`      ${executeResult.message}`);
+    }
   } else {
     console.log("      Order submission failed");
-    console.log(`      Error: ${executeResult.error}`);
-    if (executeResult.details) {
-      console.log(`      Details: ${executeResult.details}`);
+    if (executeResult.message) {
+      console.log(`      ${executeResult.message}`);
     }
   }
 
