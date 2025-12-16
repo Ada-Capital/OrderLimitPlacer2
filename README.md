@@ -14,6 +14,7 @@ Edit `.env` with your values:
 ```
 POLYGON_RPC_URL=https://polygon-rpc.com
 MAKER_PRIVATE_KEY=0x...
+FILLER_API_URL=http://localhost:8081
 ```
 
 ## Get Quote
@@ -26,8 +27,18 @@ Example output:
 
 ```
 ============================================================
-USDC -> BRLA QUOTE
+STABLECOIN QUOTE
 ============================================================
+
+Available trading pairs:
+  1. USDC -> BRLA
+  2. USDT -> BRLA
+  3. BRLA -> USDC
+  4. BRLA -> USDT
+
+Select pair (1-4): 1
+
+Selected: USDC -> BRLA
 
 Enter amount of USDC to quote: 100
 
@@ -53,11 +64,22 @@ Example output:
 1INCH LIMIT ORDER GENERATOR
 ================================================================================
 
+Available trading pairs:
+  1. USDC -> BRLA
+  2. USDT -> BRLA
+  3. BRLA -> USDC
+  4. BRLA -> USDT
+
+Select pair (1-4): 1
+
+Selected: USDC -> BRLA
+
 Enter amount of USDC to trade: 100
 
 Getting quote...
       Input:  100 USDC
-      Output: 500 BRLA
+      Output: 531.38 BRLA
+      Rate:   5.3138 BRLA/USDC
 
 Maker Address: 0x4D9e1f35e8eEB9162207d51B7Aa7a6898BD27090
 Order: USDC -> BRLA
@@ -71,8 +93,9 @@ Checking maker balance...
 ORDER SUMMARY
 --------------------------------------------------------------------------------
   You will sell:    100 USDC
-  You will receive: 500 BRLA
-  Expiration:       60 minutes
+  You will receive: 531.38 BRLA
+  Rate:             5.3138 BRLA/USDC
+  Expiration:       24 hours
 --------------------------------------------------------------------------------
 
 Do you want to proceed with this order? (y/N): y
@@ -82,6 +105,9 @@ Checking/setting approval...
 
 Generating and signing order...
       Order signed successfully
+
+Submitting order to filler...
+      Order submitted successfully
 
 ================================================================================
 ORDER OUTPUT

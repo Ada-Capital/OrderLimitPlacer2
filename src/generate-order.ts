@@ -179,7 +179,7 @@ async function main(): Promise<void> {
   console.log("");
   console.log(`Maker Address: ${makerAccount.address}`);
   console.log(`Order: ${getPairLabel(pair)}`);
-  console.log(`Expiration: ${expirationMinutes} minutes`);
+  console.log(`Expiration: 24 hours`);
   console.log("");
 
   console.log("Checking maker balance...");
@@ -219,7 +219,7 @@ async function main(): Promise<void> {
     `  You will receive: ${formatTokenAmount(takingAmount, outputToken.decimals, outputToken.symbol)}`
   );
   console.log(`  Rate:             ${quote.rate} ${outputToken.symbol}/${sourceToken.symbol}`);
-  console.log(`  Expiration:       ${expirationMinutes} minutes`);
+  console.log(`  Expiration:       24 hours`);
   console.log("-".repeat(80));
   console.log("");
 
